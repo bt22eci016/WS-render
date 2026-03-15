@@ -541,10 +541,15 @@ def main(use_mock=False):
     start_server()
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--mock", action="store_true", help="Run with mock chat messages")
-    args = parser.parse_args()
-    try:
-        main(use_mock=args.mock or MOCK_CHAT)
-    except KeyboardInterrupt:
-        log.info("Shutting down...")
+
+    generate_round()
+
+    threading.Thread(target=leaderboard_timer, daemon=True).start()
+
+    if args.mock or MOCK_CHAT:
+        threading.Thread(target=mock_chat_loop, daemon=True).start()
+    else:
+        # run pytchat in main thread
+        pytchat_loop(VIDEO_ID)
+
+    start_server()
