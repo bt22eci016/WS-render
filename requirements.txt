@@ -5,3 +5,4 @@ pytchat
 nltk
 gunicorn
 python-dotenv
+requests
