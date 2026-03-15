@@ -1,0 +1,1171 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Bebas+Neue&family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --cyan:    #00f5ff;
+            --purple:  #b44dff;
+            --green:   #00ff9d;
+            --orange:  #ff6b00;
+            --gold:    #ffd600;
+            --bg:      #07080f;
+            --bg2:     #0d0f1c;
+            --panel:   rgba(255,255,255,0.03);
+            --border:  rgba(255,255,255,0.07);
+            --text:    #e8eaf0;
+            --muted:   rgba(255,255,255,0.32);
+        }
+
+        * { margin:0; padding:0; box-sizing:border-box; }
+
+        html, body {
+            width: 1080px;
+            height: 1920px;
+            overflow: hidden;
+            background: var(--bg);
+            font-family: 'Inter', sans-serif;
+            color: var(--text);
+        }
+
+        /* Deep space background */
+        body::before {
+            content:'';
+            position:fixed; inset:0; z-index:0;
+            background:
+                radial-gradient(ellipse 1200px 700px at 50% -5%,   rgba(0,245,255,0.055) 0%, transparent 65%),
+                radial-gradient(ellipse 800px 1000px at -10% 55%,   rgba(180,77,255,0.06) 0%, transparent 60%),
+                radial-gradient(ellipse 700px 600px  at 110% 85%,  rgba(0,255,157,0.05) 0%, transparent 60%),
+                radial-gradient(ellipse 600px 400px  at 80% 20%,   rgba(255,107,0,0.03) 0%, transparent 55%),
+                linear-gradient(175deg, #080a18 0%, #07080f 50%, #060c10 100%);
+        }
+
+        /* Subtle noise texture */
+        body::after {
+            content:'';
+            position:fixed; inset:0; z-index:1;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+            background-size: 180px 180px;
+            pointer-events:none;
+            opacity: 0.6;
+        }
+
+        /* ─── CANVAS ─── */
+        .canvas {
+            position:relative;
+            width:1080px; height:1920px;
+            z-index:2;
+            display:flex;
+            flex-direction:column;
+        }
+
+        /* ═══════════════════════════════
+           HEADER  — 220px
+        ═══════════════════════════════ */
+        .header {
+            flex: 0 0 220px;
+            display:flex;
+            flex-direction:column;
+            align-items:center;
+            justify-content:center;
+            position:relative;
+            padding: 0 60px;
+        }
+
+        /* Glowing top stripe */
+        .header-glow-line {
+            position:absolute;
+            top:0; left:0; right:0;
+            height:3px;
+            background: linear-gradient(90deg,
+                transparent 0%,
+                var(--cyan) 25%,
+                var(--purple) 50%,
+                var(--cyan) 75%,
+                transparent 100%
+            );
+            filter: blur(1px);
+        }
+
+        .header-glow-line::after {
+            content:'';
+            position:absolute;
+            inset:0;
+            background: inherit;
+            filter: blur(12px);
+            opacity: 0.7;
+        }
+
+        .brand-row {
+            display:flex;
+            align-items:center;
+            gap:24px;
+            margin-bottom: 8px;
+        }
+
+        .brand-icon {
+            width:56px; height:56px;
+            border-radius:14px;
+            background: linear-gradient(135deg, rgba(0,245,255,0.15), rgba(180,77,255,0.15));
+            border: 1px solid rgba(0,245,255,0.3);
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            font-size:26px;
+            box-shadow: 0 0 30px rgba(0,245,255,0.15);
+        }
+
+        .game-title {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 80px;
+            letter-spacing: 14px;
+            line-height:1;
+            background: linear-gradient(135deg, #ffffff 20%, var(--cyan) 60%, var(--purple) 100%);
+            -webkit-background-clip:text;
+            -webkit-text-fill-color:transparent;
+            background-clip:text;
+            filter: drop-shadow(0 0 30px rgba(0,245,255,0.4));
+            animation: titlePulse 4s ease-in-out infinite;
+        }
+
+        @keyframes titlePulse {
+            0%,100% { filter: drop-shadow(0 0 25px rgba(0,245,255,0.35)); }
+            50%     { filter: drop-shadow(0 0 45px rgba(0,245,255,0.6)) drop-shadow(0 0 80px rgba(180,77,255,0.25)); }
+        }
+
+        .tagline {
+            font-family: 'Space Mono', monospace;
+            font-size: 15px;
+            letter-spacing: 7px;
+            color: var(--muted);
+            margin-top: 6px;
+        }
+
+        /* ═══════════════════════════════
+           STATUS BAR — 72px
+        ═══════════════════════════════ */
+        .status-bar {
+            flex: 0 0 72px;
+            display:flex;
+            align-items:center;
+            padding: 0 48px;
+            gap: 0;
+            background: rgba(0,245,255,0.03);
+            border-top: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .live-badge {
+            display:flex;
+            align-items:center;
+            gap: 9px;
+            padding: 8px 18px;
+            background: rgba(0,255,157,0.08);
+            border: 1px solid rgba(0,255,157,0.2);
+            border-radius: 40px;
+            flex-shrink: 0;
+        }
+
+        .live-dot {
+            width:9px; height:9px;
+            border-radius:50%;
+            background: var(--green);
+            box-shadow: 0 0 8px var(--green), 0 0 20px rgba(0,255,157,0.5);
+            animation: livePulse 1.8s ease-in-out infinite;
+        }
+
+        @keyframes livePulse {
+            0%,100% { box-shadow: 0 0 8px var(--green), 0 0 20px rgba(0,255,157,0.5); }
+            50%     { box-shadow: 0 0 4px var(--green), 0 0 10px rgba(0,255,157,0.2); }
+        }
+
+        .live-text {
+            font-family: 'Space Mono', monospace;
+            font-size: 13px;
+            font-weight:700;
+            color: var(--green);
+            letter-spacing: 3px;
+        }
+
+        #roundInfo {
+            flex:1;
+            text-align:center;
+            font-family: 'Space Mono', monospace;
+            font-size: 15px;
+            font-weight:700;
+            color: var(--cyan);
+            letter-spacing: 2px;
+            text-shadow: 0 0 20px rgba(0,245,255,0.5);
+        }
+
+        .timer-block {
+            display:flex;
+            align-items:center;
+            gap:10px;
+            flex-shrink:0;
+        }
+
+        .timer-label {
+            font-size: 12px;
+            color: var(--muted);
+            letter-spacing: 2px;
+            text-transform:uppercase;
+            font-weight:600;
+        }
+
+        #leaderboardTimer {
+            font-family: 'Space Mono', monospace;
+            font-size: 22px;
+            font-weight:700;
+            color: var(--cyan);
+            background: rgba(0,245,255,0.08);
+            border: 1px solid rgba(0,245,255,0.2);
+            border-radius: 8px;
+            padding: 4px 14px;
+            min-width: 72px;
+            text-align:center;
+        }
+
+        /* ═══════════════════════════════
+           GRID ZONE — 830px
+        ═══════════════════════════════ */
+        .grid-zone {
+            flex: 0 0 830px;
+            display:flex;
+            flex-direction:column;
+            align-items:center;
+            justify-content:center;
+            gap: 20px;
+            padding: 0 48px;
+            position:relative;
+        }
+
+        .grid-header {
+            width:100%;
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+        }
+
+        .grid-round-tag {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 28px;
+            letter-spacing: 6px;
+            color: var(--cyan);
+            opacity: 0.8;
+        }
+
+        .word-progress {
+            display:flex;
+            align-items:center;
+            gap:10px;
+            font-size:14px;
+            color: var(--muted);
+            font-weight:600;
+            letter-spacing:1px;
+        }
+
+        .progress-bar-wrap {
+            width: 160px;
+            height: 6px;
+            background: rgba(255,255,255,0.08);
+            border-radius: 3px;
+            overflow:hidden;
+        }
+
+        .progress-bar-fill {
+            height:100%;
+            width:0%;
+            background: linear-gradient(90deg, var(--cyan), var(--purple));
+            border-radius:3px;
+            transition: width 0.5s ease;
+            box-shadow: 0 0 8px rgba(0,245,255,0.5);
+        }
+
+        /* Grid Container */
+        .grid-shell {
+            position:relative;
+            padding: 3px;
+            border-radius: 28px;
+            background: linear-gradient(135deg, rgba(0,245,255,0.3), rgba(180,77,255,0.2), rgba(0,255,157,0.15));
+        }
+
+        .grid-shell::before {
+            content:'';
+            position:absolute;
+            inset:0;
+            border-radius:28px;
+            background: inherit;
+            filter: blur(16px);
+            opacity:0.4;
+            z-index:-1;
+        }
+
+        .grid-inner {
+            background: #0a0c1a;
+            border-radius: 26px;
+            padding: 28px;
+            position:relative;
+            overflow:hidden;
+        }
+
+        /* Corner decorations */
+        .grid-inner::before,
+        .grid-inner::after {
+            content:'';
+            position:absolute;
+            width: 60px; height:60px;
+        }
+        .grid-inner::before {
+            top:0; left:0;
+            border-top: 2px solid rgba(0,245,255,0.5);
+            border-left: 2px solid rgba(0,245,255,0.5);
+            border-radius: 26px 0 0 0;
+        }
+        .grid-inner::after {
+            bottom:0; right:0;
+            border-bottom: 2px solid rgba(180,77,255,0.5);
+            border-right: 2px solid rgba(180,77,255,0.5);
+            border-radius: 0 0 26px 0;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(9, 1fr);
+            gap: 7px;
+            position:relative;
+            z-index:1;
+        }
+
+        .cell {
+            width: 80px; height: 80px;
+            border-radius: 12px;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.09);
+            font-family: 'Space Mono', monospace;
+            font-size: 26px;
+            font-weight: 700;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            color: rgba(220,240,255,0.9);
+            transition: all 0.3s cubic-bezier(0.34,1.4,0.64,1);
+            cursor:default;
+            position:relative;
+            overflow:hidden;
+        }
+
+        .cell::before {
+            content:'';
+            position:absolute;
+            inset:0;
+            background: linear-gradient(135deg, rgba(0,245,255,0.06), transparent);
+            opacity:0;
+            transition: opacity 0.3s;
+        }
+
+        .cell:hover::before { opacity:1; }
+
+        .cell.found {
+            background: rgba(255,255,255,0.015) !important;
+            border-color: rgba(255,255,255,0.04) !important;
+            color: rgba(255,255,255,0.18) !important;
+            transform: scale(0.93);
+            box-shadow: none !important;
+        }
+
+        .cell.found::after {
+            content:'';
+            position:absolute;
+            inset:0;
+            background: rgba(0,0,0,0.35);
+            border-radius:11px;
+        }
+
+        /* ═══════════════════════════════
+           LEADERBOARD — 450px
+        ═══════════════════════════════ */
+        .leaderboard-zone {
+            flex: 0 0 450px;
+            padding: 0 48px;
+            display:flex;
+            flex-direction:column;
+            gap:14px;
+        }
+
+        .section-label {
+            display:flex;
+            align-items:center;
+            gap:14px;
+            padding-top: 12px;
+        }
+
+        .sl-icon {
+            width:36px; height:36px;
+            border-radius:8px;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            font-size:18px;
+            flex-shrink:0;
+        }
+
+        .sl-icon.gold { background: rgba(255,214,0,0.12); border:1px solid rgba(255,214,0,0.2); }
+        .sl-icon.teal { background: rgba(0,245,255,0.1);  border:1px solid rgba(0,245,255,0.18); }
+
+        .sl-title {
+            font-size: 13px;
+            font-weight:800;
+            letter-spacing:4px;
+            text-transform:uppercase;
+            color: var(--muted);
+        }
+
+        .sl-line {
+            flex:1;
+            height:1px;
+            background: var(--border);
+        }
+
+        .board-panel {
+            flex:1;
+            background: var(--panel);
+            border:1px solid var(--border);
+            border-radius:20px;
+            overflow:hidden;
+            display:flex;
+            flex-direction:column;
+        }
+
+        .leader-item {
+            display:flex;
+            align-items:center;
+            padding: 0 24px;
+            height: 72px;
+            border-bottom: 1px solid var(--border);
+            gap:16px;
+            transition: background 0.2s;
+            animation: rowIn 0.35s ease-out;
+        }
+
+        @keyframes rowIn {
+            from { opacity:0; transform:translateY(-8px); }
+            to   { opacity:1; transform:translateY(0); }
+        }
+
+        .leader-item:last-child { border-bottom:none; }
+        .leader-item:first-child { background: linear-gradient(90deg, rgba(255,214,0,0.06), transparent); }
+
+        .li-rank {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 28px;
+            width:40px;
+            text-align:center;
+            flex-shrink:0;
+        }
+
+        .li-medal { font-size:26px; }
+
+        .li-bar {
+            flex:1;
+            display:flex;
+            flex-direction:column;
+            gap:5px;
+        }
+
+        .li-name {
+            font-size:20px;
+            font-weight:700;
+            color: #fff;
+        }
+
+        .li-track {
+            height:4px;
+            background: rgba(255,255,255,0.06);
+            border-radius:2px;
+            overflow:hidden;
+        }
+
+        .li-fill {
+            height:100%;
+            border-radius:2px;
+            background: linear-gradient(90deg, var(--cyan), var(--purple));
+            box-shadow: 0 0 6px rgba(0,245,255,0.5);
+            transition: width 0.6s ease;
+        }
+
+        .li-pts {
+            font-family: 'Space Mono', monospace;
+            font-size:20px;
+            font-weight:700;
+            color: var(--green);
+            flex-shrink:0;
+        }
+
+        .empty-board {
+            flex:1;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            font-family:'Space Mono',monospace;
+            font-size:15px;
+            color: var(--muted);
+            letter-spacing:3px;
+        }
+
+        /* ═══════════════════════════════
+           SOLVERS ZONE — remaining
+        ═══════════════════════════════ */
+        .solvers-zone {
+            flex:1;
+            padding: 0 48px 44px;
+            display:flex;
+            flex-direction:column;
+            gap:14px;
+            overflow:hidden;
+            min-height:0;
+        }
+
+        .solvers-panel {
+            flex:1;
+            background: var(--panel);
+            border:1px solid var(--border);
+            border-radius:20px;
+            overflow:hidden;
+            padding:4px 0;
+        }
+
+        .winner-entry {
+            display:flex;
+            align-items:center;
+            gap:12px;
+            padding: 14px 24px;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+            animation: slideIn 0.35s cubic-bezier(0.34,1.4,0.64,1);
+        }
+
+        .winner-entry:last-child { border-bottom:none; }
+
+        @keyframes slideIn {
+            from { opacity:0; transform:translateX(30px) scale(0.95); }
+            to   { opacity:1; transform:translateX(0)   scale(1); }
+        }
+
+        .we-bullet {
+            width:8px; height:8px;
+            border-radius:50%;
+            background:var(--green);
+            box-shadow:0 0 8px var(--green);
+            flex-shrink:0;
+        }
+
+        .we-word {
+            font-family:'Space Mono',monospace;
+            font-size:18px;
+            font-weight:700;
+            color: var(--cyan);
+            letter-spacing:2px;
+            flex-shrink:0;
+        }
+
+        .we-sep {
+            color: var(--muted);
+            font-size:14px;
+        }
+
+        .we-user {
+            font-size:17px;
+            font-weight:600;
+            color: rgba(255,210,80,0.9);
+        }
+
+        /* ═══════════════════════════════
+           WINNER POPUP
+        ═══════════════════════════════ */
+        .win-popup {
+            position:fixed;
+            z-index:8000;
+            transform: translate(-50%,-50%);
+            pointer-events:none;
+            animation:
+                popIn  0.45s cubic-bezier(0.34,1.56,0.64,1),
+                popOut 0.4s  ease-in 2.4s forwards;
+        }
+
+        .win-popup-inner {
+            background: linear-gradient(135deg, #0d0f1c, #15162a);
+            border: 2px solid rgba(0,245,255,0.4);
+            border-radius: 24px;
+            padding: 28px 52px;
+            text-align:center;
+            box-shadow:
+                0 0 0 1px rgba(0,245,255,0.1),
+                0 0 50px rgba(0,245,255,0.25),
+                0 0 100px rgba(180,77,255,0.15),
+                inset 0 1px 0 rgba(255,255,255,0.06);
+            position:relative;
+            overflow:hidden;
+        }
+
+        .win-popup-inner::before {
+            content:'';
+            position:absolute;
+            top:-60px; left:-60px;
+            width:160px; height:160px;
+            background: radial-gradient(circle, rgba(0,245,255,0.12), transparent 70%);
+            border-radius:50%;
+        }
+
+        .popup-finder {
+            font-size:14px;
+            font-weight:700;
+            letter-spacing:4px;
+            text-transform:uppercase;
+            color: var(--muted);
+            margin-bottom:6px;
+        }
+
+        .popup-username {
+            font-size:28px;
+            font-weight:800;
+            color: var(--gold);
+            margin-bottom:10px;
+        }
+
+        .popup-word {
+            font-family:'Bebas Neue',sans-serif;
+            font-size:62px;
+            letter-spacing:8px;
+            background: linear-gradient(135deg, var(--cyan), var(--purple));
+            -webkit-background-clip:text;
+            -webkit-text-fill-color:transparent;
+            background-clip:text;
+            line-height:1;
+            filter: drop-shadow(0 0 20px rgba(0,245,255,0.5));
+        }
+
+        .popup-pts {
+            font-family:'Space Mono',monospace;
+            font-size:16px;
+            color: var(--green);
+            margin-top:8px;
+            letter-spacing:3px;
+        }
+
+        @keyframes popIn {
+            0%   { opacity:0; transform:translate(-50%,-50%) scale(0.4) rotate(-8deg); }
+            100% { opacity:1; transform:translate(-50%,-50%) scale(1)   rotate(0); }
+        }
+        @keyframes popOut {
+            0%   { opacity:1; transform:translate(-50%,-50%) scale(1); }
+            100% { opacity:0; transform:translate(-50%,-70%) scale(0.6); }
+        }
+
+        /* ═══════════════════════════════
+           INTERMISSION OVERLAY
+        ═══════════════════════════════ */
+        #intermissionOverlay {
+            display:none;
+            position:fixed;
+            inset:0;
+            width:1080px; height:1920px;
+            z-index:9999;
+            background:
+                radial-gradient(ellipse 1000px 800px at 50% 30%, rgba(180,77,255,0.1) 0%, transparent 65%),
+                radial-gradient(ellipse 800px 600px at 20% 80%,  rgba(0,245,255,0.07) 0%, transparent 60%),
+                #07080f;
+            flex-direction:column;
+            align-items:center;
+            justify-content:center;
+            gap:40px;
+        }
+
+        #intermissionOverlay.active {
+            display:flex;
+            animation: fadeOverlay 0.7s ease;
+        }
+
+        @keyframes fadeOverlay {
+            from { opacity:0; }
+            to   { opacity:1; }
+        }
+
+        .im-badge {
+            display:flex;
+            flex-direction:column;
+            align-items:center;
+            gap:12px;
+        }
+
+        .im-icon {
+            width:120px; height:120px;
+            border-radius:30px;
+            background: linear-gradient(135deg, rgba(255,214,0,0.15), rgba(255,107,0,0.1));
+            border: 2px solid rgba(255,214,0,0.25);
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            font-size:56px;
+            box-shadow: 0 0 60px rgba(255,214,0,0.15);
+            animation: floatIcon 2.5s ease-in-out infinite;
+        }
+
+        @keyframes floatIcon {
+            0%,100% { transform:translateY(0); }
+            50%     { transform:translateY(-12px); }
+        }
+
+        .im-headline {
+            font-family:'Bebas Neue',sans-serif;
+            font-size:72px;
+            letter-spacing:10px;
+            background: linear-gradient(135deg, var(--gold), #ff9500);
+            -webkit-background-clip:text;
+            -webkit-text-fill-color:transparent;
+            background-clip:text;
+            filter: drop-shadow(0 0 30px rgba(255,214,0,0.4));
+        }
+
+        .im-sub {
+            font-size:14px;
+            font-weight:600;
+            letter-spacing:6px;
+            color: var(--muted);
+            text-transform:uppercase;
+        }
+
+        .im-divider {
+            width:700px; height:1px;
+            background: linear-gradient(90deg, transparent, rgba(255,214,0,0.4), rgba(180,77,255,0.4), transparent);
+        }
+
+        .im-board-card {
+            width:880px;
+            background: rgba(255,255,255,0.03);
+            border:1px solid rgba(255,255,255,0.07);
+            border-radius:28px;
+            overflow:hidden;
+        }
+
+        .im-board-head {
+            padding: 20px 36px;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+            background: rgba(255,214,0,0.04);
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+        }
+
+        .im-board-title {
+            font-size:13px;
+            font-weight:800;
+            letter-spacing:5px;
+            text-transform:uppercase;
+            color: rgba(255,214,0,0.7);
+        }
+
+        .im-entry {
+            display:flex;
+            align-items:center;
+            gap:18px;
+            padding: 18px 36px;
+            border-bottom:1px solid rgba(255,255,255,0.04);
+        }
+
+        .im-entry:last-child { border-bottom:none; }
+
+        .im-rank { font-size:26px; width:38px; text-align:center; }
+        .im-name { flex:1; font-size:24px; font-weight:700; color:#fff; }
+        .im-pts  { font-family:'Space Mono',monospace; font-size:22px; color:var(--green); }
+
+        .im-timer-block {
+            display:flex;
+            flex-direction:column;
+            align-items:center;
+            gap:8px;
+        }
+
+        .im-timer-label {
+            font-size:13px;
+            font-weight:700;
+            letter-spacing:5px;
+            color: var(--muted);
+            text-transform:uppercase;
+        }
+
+        .im-countdown {
+            font-family:'Bebas Neue',sans-serif;
+            font-size:140px;
+            letter-spacing:6px;
+            line-height:1;
+            background: linear-gradient(135deg, var(--green), var(--cyan));
+            -webkit-background-clip:text;
+            -webkit-text-fill-color:transparent;
+            background-clip:text;
+            filter: drop-shadow(0 0 40px rgba(0,255,157,0.5));
+            min-width:240px;
+            text-align:center;
+            animation: countPulse 1s ease-in-out infinite;
+        }
+
+        @keyframes countPulse {
+            0%,100% { filter: drop-shadow(0 0 40px rgba(0,255,157,0.5)); }
+            50%     { filter: drop-shadow(0 0 70px rgba(0,255,157,0.8)); }
+        }
+
+        .im-pulse-text {
+            font-size:14px;
+            font-weight:700;
+            letter-spacing:5px;
+            color: var(--muted);
+            animation: breathe 1.5s ease-in-out infinite;
+        }
+
+        @keyframes breathe {
+            0%,100% { opacity:1; }
+            50%     { opacity:0.4; }
+        }
+
+    </style>
+</head>
+<body>
+
+<!-- INTERMISSION -->
+<div id="intermissionOverlay">
+    <div class="im-badge">
+        <div class="im-icon">🏆</div>
+        <div class="im-headline">CYCLE COMPLETE</div>
+        <div class="im-sub">Final Standings · New Game Starting</div>
+    </div>
+
+    <div class="im-divider"></div>
+
+    <div class="im-board-card">
+        <div class="im-board-head">
+            <div class="im-board-title">⭐ Final Standings</div>
+        </div>
+        <div id="intermissionBoardList"></div>
+    </div>
+
+    <div class="im-timer-block">
+        <div class="im-timer-label">Next Round In</div>
+        <div class="im-countdown" id="intermissionCountdown">20</div>
+        <div class="im-pulse-text">✦ PREPARING NEW GRID ✦</div>
+    </div>
+</div>
+
+<!-- MAIN -->
+<div class="canvas">
+
+    <!-- HEADER -->
+    <header class="header">
+        <div class="header-glow-line"></div>
+        <div class="brand-row">
+            <div class="brand-icon">🔍</div>
+            <div class="game-title">WORD HUNT</div>
+        </div>
+        <div class="tagline">24/7 · LIVE · Answer in Chat</div>
+    </header>
+
+    <!-- STATUS BAR -->
+    <div class="status-bar">
+        <div class="live-badge">
+            <div class="live-dot"></div>
+            <div class="live-text">LIVE</div>
+        </div>
+        <div id="roundInfo"></div>
+        <div class="timer-block">
+            <div class="timer-label">Reset</div>
+            <div id="leaderboardTimer">--</div>
+        </div>
+    </div>
+
+    <!-- GRID -->
+    <div class="grid-zone">
+        <div class="grid-header">
+            <div class="grid-round-tag" id="gridLabel">ROUND 1</div>
+            <div class="word-progress">
+                <span id="wordProgressText">0 / 0</span>
+                <div class="progress-bar-wrap">
+                    <div class="progress-bar-fill" id="progressFill"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid-shell">
+            <div class="grid-inner">
+                <div class="grid" id="grid"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- LEADERBOARD -->
+    <div class="leaderboard-zone">
+        <div class="section-label">
+            <div class="sl-icon gold">🏆</div>
+            <div class="sl-title">Leaderboard</div>
+            <div class="sl-line"></div>
+        </div>
+        <div class="board-panel">
+            <div id="leaderboardList">
+                <div class="empty-board">NO SCORES YET — BE FIRST!</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SOLVERS -->
+    <div class="solvers-zone">
+        <div class="section-label">
+            <div class="sl-icon teal">⚡</div>
+            <div class="sl-title">Round Finds</div>
+            <div class="sl-line"></div>
+        </div>
+        <div class="solvers-panel">
+            <div id="solversList"></div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    const socket = io();
+    let gridData = [];
+    const foundWords = new Set();
+    let wordsInfo = { total:0, found:0 };
+
+    // ── AUDIO ──
+    let audioCtx = null;
+    function getACtx() {
+        if (!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+        return audioCtx;
+    }
+    ['click','keydown'].forEach(e => document.addEventListener(e, () => { try { getACtx().resume(); } catch(x){} }));
+
+    function playFind() {
+        try {
+            const ctx = getACtx();
+            if (ctx.state==='suspended') ctx.resume();
+            const t = ctx.currentTime;
+            [[880,0,0.12],[1100,0.07,0.12],[1320,0.14,0.16]].forEach(([f,d,dur]) => {
+                const o=ctx.createOscillator(), g=ctx.createGain();
+                o.type='sine'; o.frequency.value=f;
+                g.gain.setValueAtTime(0, t+d);
+                g.gain.linearRampToValueAtTime(0.3, t+d+0.02);
+                g.gain.exponentialRampToValueAtTime(0.001, t+d+dur);
+                o.connect(g); g.connect(ctx.destination);
+                o.start(t+d); o.stop(t+d+dur);
+            });
+        } catch(e) {}
+    }
+
+    function playReset() {
+        try {
+            const ctx = getACtx();
+            if (ctx.state==='suspended') ctx.resume();
+            const t = ctx.currentTime;
+            [[392,0,0.2],[523,0.22,0.2],[659,0.44,0.25],[784,0.66,0.35]].forEach(([f,d,dur]) => {
+                const o=ctx.createOscillator(), g=ctx.createGain();
+                o.type='triangle'; o.frequency.value=f;
+                g.gain.setValueAtTime(0, t+d);
+                g.gain.linearRampToValueAtTime(0.35, t+d+0.03);
+                g.gain.exponentialRampToValueAtTime(0.001, t+d+dur);
+                o.connect(g); g.connect(ctx.destination);
+                o.start(t+d); o.stop(t+d+dur);
+            });
+        } catch(e) {}
+    }
+
+    // ── GRID ──
+    socket.on('update_grid', function(grid) {
+        const container = document.getElementById('grid');
+        container.innerHTML = '';
+        gridData = grid;
+        grid.forEach((row,r) => {
+            row.forEach((letter,c) => {
+                const div = document.createElement('div');
+                div.className = 'cell';
+                div.dataset.row = r; div.dataset.col = c;
+                div.textContent = letter;
+                container.appendChild(div);
+            });
+        });
+        foundWords.forEach(strikeWord);
+    });
+
+    function strikeWord(word) {
+        if (!gridData.length) return;
+        const size = gridData.length;
+        const dirs = [[0,1],[0,-1],[1,0],[-1,0],[1,1],[-1,-1],[1,-1],[-1,1]];
+        for (let r=0;r<size;r++) {
+            for (let c=0;c<size;c++) {
+                if (gridData[r][c]!==word[0]) continue;
+                for (const [dx,dy] of dirs) {
+                    let match=true; const coords=[];
+                    for (let i=0;i<word.length;i++) {
+                        const nr=r+dx*i, nc=c+dy*i;
+                        if (nr<0||nr>=size||nc<0||nc>=size) { match=false; break; }
+                        if (gridData[nr][nc]!==word[i])    { match=false; break; }
+                        coords.push([nr,nc]);
+                    }
+                    if (match) {
+                        coords.forEach(([rr,cc]) => {
+                            const cell = document.querySelector(`.cell[data-row="${rr}"][data-col="${cc}"]`);
+                            if (cell) cell.classList.add('found');
+                        });
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
+    function updateProgress() {
+        const total = wordsInfo.total||0;
+        const found = wordsInfo.found||0;
+        const pct = total ? (found/total*100) : 0;
+        document.getElementById('wordProgressText').textContent = `${found} / ${total}`;
+        document.getElementById('progressFill').style.width = pct+'%';
+    }
+
+    // ── SCORES ──
+    socket.on('update_scores', function(scores) {
+        const container = document.getElementById('leaderboardList');
+        const entries = Object.entries(scores||{}).sort(([,a],[,b])=>b-a).slice(0,5);
+        if (!entries.length) {
+            container.innerHTML = '<div class="empty-board">NO SCORES YET — BE FIRST!</div>';
+            return;
+        }
+        const maxPts = entries[0][1]||1;
+        const medals = ['🥇','🥈','🥉'];
+        container.innerHTML = entries.map(([user,pts],i) =>
+            `<div class="leader-item">
+                <div class="li-rank">${medals[i]||''}</div>
+                <div class="li-bar">
+                    <div class="li-name">${user}</div>
+                    <div class="li-track"><div class="li-fill" style="width:${(pts/maxPts*100).toFixed(1)}%"></div></div>
+                </div>
+                <div class="li-pts">${pts}</div>
+            </div>`
+        ).join('');
+    });
+
+    socket.on('leaderboard_countdown', function(data) {
+        const el = document.getElementById('leaderboardTimer');
+        if (el) el.textContent = `${data.remaining}s`;
+    });
+
+    // ── WINNER ──
+    socket.on('winner', function(data) {
+        foundWords.add(data.word);
+        strikeWord(data.word);
+        if (wordsInfo.total) { wordsInfo.found=(wordsInfo.found||0)+1; updateProgress(); }
+        playFind();
+        showPopup(data.user, data.word);
+
+        const sp = document.getElementById('solversList');
+        if (sp) {
+            const el = document.createElement('div');
+            el.className = 'winner-entry';
+            el.innerHTML = `
+                <div class="we-bullet"></div>
+                <div class="we-word">${data.word}</div>
+                <div class="we-sep">·</div>
+                <div class="we-user">${data.user}</div>
+            `;
+            sp.prepend(el);
+            while (sp.childElementCount > 16) sp.removeChild(sp.lastChild);
+        }
+    });
+
+    function showPopup(user, word) {
+        const popup = document.createElement('div');
+        popup.className = 'win-popup';
+        popup.innerHTML = `
+            <div class="win-popup-inner">
+                <div class="popup-finder">Found By</div>
+                <div class="popup-username">${user}</div>
+                <div class="popup-word">${word}</div>
+                <div class="popup-pts">+ POINTS</div>
+            </div>
+        `;
+        const gridEl = document.getElementById('grid');
+        if (gridEl) {
+            const rect = gridEl.getBoundingClientRect();
+            popup.style.top  = `${rect.top + rect.height/2}px`;
+            popup.style.left = `${rect.left + rect.width/2}px`;
+        } else {
+            popup.style.top='50%'; popup.style.left='50%';
+        }
+        document.body.appendChild(popup);
+        setTimeout(()=>popup.remove(), 2900);
+    }
+
+    // ── NEW ROUND ──
+    socket.on('new_round', function(data) {
+        const overlay = document.getElementById('intermissionOverlay');
+        if (overlay) overlay.classList.remove('active');
+        playReset();
+
+        wordsInfo = { total: data.total_words||0, found:0 };
+        updateProgress();
+
+        const label = document.getElementById('gridLabel');
+        if (label) label.textContent = `ROUND ${data.round||''}`;
+
+        const sp = document.getElementById('solversList');
+        if (sp) sp.innerHTML = '';
+
+        foundWords.clear();
+
+        const ri = document.getElementById('roundInfo');
+        if (ri) {
+            ri.textContent = '⚡ NEW ROUND STARTED';
+            setTimeout(()=>{ ri.textContent=''; }, 3000);
+        }
+    });
+
+    // ── INTERMISSION ──
+    socket.on('intermission', function(data) {
+        const overlay   = document.getElementById('intermissionOverlay');
+        const countdown = document.getElementById('intermissionCountdown');
+        const boardList = document.getElementById('intermissionBoardList');
+
+        const scores  = data.scores||{};
+        const entries = Object.entries(scores).sort(([,a],[,b])=>b-a).slice(0,8);
+        const medals  = ['🥇','🥈','🥉'];
+        boardList.innerHTML = entries.length
+            ? entries.map(([user,pts],i) =>
+                `<div class="im-entry">
+                    <span class="im-rank">${medals[i]||(i+1)}</span>
+                    <span class="im-name">${user}</span>
+                    <span class="im-pts">${pts} PTS</span>
+                </div>`
+              ).join('')
+            : '<div style="text-align:center;padding:32px;color:rgba(255,255,255,0.25);font-size:18px;letter-spacing:3px;font-family:\'Space Mono\',monospace;">NO SCORES THIS CYCLE</div>';
+
+        if (countdown) countdown.textContent = data.duration||20;
+        if (overlay)   overlay.classList.add('active');
+
+        const timer = document.getElementById('leaderboardTimer');
+        if (timer) timer.textContent = `${data.duration}s`;
+    });
+
+    socket.on('intermission_tick', function(data) {
+        const timer    = document.getElementById('leaderboardTimer');
+        const countdown= document.getElementById('intermissionCountdown');
+        if (timer)    timer.textContent    = `${data.remaining}s`;
+        if (countdown)countdown.textContent = data.remaining;
+    });
+
+    socket.on('update_words', function(data) {
+        wordsInfo = data;
+        updateProgress();
+    });
+
+    socket.on('connect', ()=>console.log('✅ Connected'));
+</script>
+</body>
+</html>
